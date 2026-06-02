@@ -1,0 +1,29 @@
+# Build outputs
+yolov8n_cap_multithread/build/
+yolov8n_cap_multithread/install/
+
+# Third-party SDK files copied from the board (re-obtainable — see README)
+3rdparty/
+runtime/
+
+# Shared libraries (binary blobs)
+**/*.so
+**/*.so.*
+**/*.a
+
+# Compiled object files
+**/*.o
+**/*.d
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+Makefile
+
+# Editor / OS
+.vscode/
+*.swp
+*~
+.DS_Store
