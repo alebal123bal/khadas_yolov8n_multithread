@@ -48,6 +48,15 @@ For the full software architecture (Mermaid diagrams of the internal pipeline
 and the multi-process topology) see [docs/architecture.md](docs/architecture.md);
 for launch commands see [docs/usage.md](docs/usage.md).
 
+**Related repositories**
+
+- **[RKNN_TRAIN_YOLO](https://github.com/alebal123bal/RKNN_TRAIN_YOLO)** — the
+  entire pipeline for training, converting, and exporting the YOLO model into
+  the Rockchip NPU `.rknn` format used here.
+- **[RKLLM_LLAMA_QWEN](https://github.com/alebal123bal/RKLLM_LLAMA_QWEN)** — the
+  entire pipeline for running optimized LLM models on the RK3588S, either on the
+  NPU (RKLLM) or the CPU (llama).
+
 ---
 
 ## Performance
