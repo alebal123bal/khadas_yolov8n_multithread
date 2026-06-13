@@ -2,7 +2,7 @@
 
 <!-- TODO: replace with the demo GIF -->
 <p align="center">
-  <img src="res/gifs/demo.gif" alt="Real-time YOLOv8n UAV detection running on the RK3588S NPU" width="720">
+  <img src="res/gifs/Dual_Track.gif" alt="Real-time YOLOv8n UAV detection running on the RK3588S NPU" width="720">
 </p>
 
 **Real-time YOLOv8n UAV detection at the sensor's 46 FPS ceiling, in ~140 MB of
