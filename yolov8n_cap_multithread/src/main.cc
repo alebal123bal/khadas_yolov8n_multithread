@@ -520,7 +520,7 @@ int main(int argc, char** argv)
                         det->box.left,  det->box.top,
                         det->box.right  - det->box.left,
                         det->box.bottom - det->box.top,
-                        0x0000FF, 3);
+                        0xFFA500, 6);
         }
 
         // 3. push frame to output
