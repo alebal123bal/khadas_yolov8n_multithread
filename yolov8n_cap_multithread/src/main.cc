@@ -91,13 +91,16 @@ struct InferJob {
     int      buf_idx;      // index into BufPool; < 0 is a shutdown sentinel
     float    scale_w, scale_h;
     uint64_t frame_id;     // monotonic counter stamped at capture time
+    uint64_t capture_us;   // wall-clock (us) stamped right after capture starts
 };
 
 // ---------- result pushed by inference threads into result_queue ----------
 struct InferResult {
     int                   buf_idx;
     detect_result_group_t group;
-    uint64_t              frame_id;  // passed through from InferJob
+    uint64_t              frame_id;    // passed through from InferJob
+    uint64_t              capture_us;  // passed through from InferJob
+    uint64_t              infer_us;    // worker-measured NPU inference + decode time (us)
 };
 
 // ---------- fixed pool of pre-allocated frame buffers ----------
@@ -183,11 +186,15 @@ static void inference_thread(ThreadCtx* tc)
         if (job.buf_idx < 0) break;    // shutdown sentinel
 
         InferResult res;
-        res.buf_idx  = job.buf_idx;
-        res.frame_id = job.frame_id;
+        res.buf_idx    = job.buf_idx;
+        res.frame_id   = job.frame_id;
+        res.capture_us = job.capture_us;
+        res.infer_us   = 0;
 
         if (tc->state->inference_enabled.load(std::memory_order_relaxed)) {
             // Normal path: run RKNN inference and decode YOLO outputs.
+            struct timeval infer_t0;
+            gettimeofday(&infer_t0, NULL);     // inference timing starts here
             tc->inputs[0].buf = tc->pool->model[job.buf_idx];  // point descriptor at pre-processed buffer
             rknn_inputs_set(tc->ctx, 1, tc->inputs);           // upload input to NPU
             rknn_run(tc->ctx, NULL);                           // run inference
@@ -205,6 +212,13 @@ static void inference_thread(ThreadCtx* tc)
                 &res.group);
 
             rknn_outputs_release(tc->ctx, tc->n_output, tc->outputs.data());  // return output buffers to RKNN runtime
+
+            // Wall time spent on this worker for NPU IO + run + decode.  Runs in
+            // parallel across the three cores, so it is hidden from the main
+            // loop's throughput but contributes to end-to-end latency.
+            struct timeval infer_t1;
+            gettimeofday(&infer_t1, NULL);
+            res.infer_us = (uint64_t)(__get_us(infer_t1) - __get_us(infer_t0));
         } else {
             // Paused path: skip RKNN, emit an empty result so the pipeline
             // (display, buffer recycling) keeps flowing without stalling.
@@ -384,6 +398,8 @@ int main(int argc, char** argv)
     uint64_t frame_counter = 0;
     auto capture_and_submit = [&]() {
         int idx = pool.acquire();
+        struct timeval cap_tv;
+        gettimeofday(&cap_tv, NULL);   // glass-to-glass latency starts here
         void* nv12_ptr;
         read_mipi_frame_nv12(&nv12_ptr);
         rga_nv12_to_bgr(nv12_ptr, WIDTH, HEIGHT, pool.display[idx]);
@@ -391,7 +407,7 @@ int main(int argc, char** argv)
         float sw = 0, sh = 0;
         rga_letterbox_rgb(pool.display[idx], WIDTH, HEIGHT,
                           pool.model[idx], model_w, model_h, &sw, &sh);
-        infer_q.push({idx, sw, sh, frame_counter++});
+        infer_q.push({idx, sw, sh, frame_counter++, (uint64_t)__get_us(cap_tv)});
         state.frame_id.store(frame_counter, std::memory_order_relaxed);
     };
 
@@ -409,7 +425,7 @@ int main(int argc, char** argv)
     //   2. Draw detections and push to output.
     //   3. Recycle the buffer, capture next frame, submit new job.
     float total_time = 0;
-    float time_capture = 0, time_display = 0;
+    float time_capture = 0, time_display = 0, time_e2e = 0, time_infer = 0;
     struct timeval start_time, stop_time, t0, t1;
     int n = 0;
 
@@ -532,6 +548,17 @@ int main(int argc, char** argv)
         gettimeofday(&t1, NULL);
         time_display += (__get_us(t1) - __get_us(t0)) / 1000;
 
+        // End-to-end latency: from this frame's capture (in capture_and_submit)
+        // to its display push above.  Unlike the main-loop period (throughput),
+        // this includes the time the frame waited in infer_q/result_q while
+        // other in-flight frames were processed, so it reflects glass-to-glass
+        // delay rather than frame-rate.
+        time_e2e += (__get_us(t1) - res.capture_us) / 1000;
+
+        // Worker-side NPU inference + decode time for this frame (parallel,
+        // hidden from throughput but part of end-to-end latency).
+        time_infer += res.infer_us / 1000.0f;
+
         // 4. publish detections to the data plane (non-blocking).
         {
             DetectionMessage dmsg;
@@ -558,10 +585,12 @@ int main(int argc, char** argv)
             state.fps.store(fps, std::memory_order_relaxed);
             printf("--- avg over 10 frames ---\n");
             printf("  capture+preproc : %6.2f ms\n", time_capture / 10);
+            printf("  inference (NPU) : %6.2f ms  (parallel, off critical path)\n", time_infer / 10);
             printf("  display         : %6.2f ms\n", time_display / 10);
             printf("  total (main)    : %6.2f ms  (%.1f FPS)\n", avg_ms, fps);
+            printf("  end-to-end lat. : %6.2f ms  (capture\u2192display)\n", time_e2e / 10);
             total_time = 0;
-            time_capture = time_display = 0;
+            time_capture = time_display = time_e2e = time_infer = 0;
             n = 0;
         }
     }
@@ -574,7 +603,7 @@ int main(int argc, char** argv)
     data_pub.stop();
 
     for (int i = 0; i < N_THREADS; i++)
-        infer_q.push({-1, 0.f, 0.f, 0});
+        infer_q.push({-1, 0.f, 0.f, 0, 0});
     for (int i = 0; i < N_THREADS; i++)
         threads[i].join();
 
