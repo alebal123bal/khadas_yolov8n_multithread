@@ -29,5 +29,4 @@ Makefile
 .DS_Store
 
 # Demo media kept offline (embedded in README via GitHub attachments)
-res/gifs/
 res/videos/

@@ -2,7 +2,7 @@
 
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/5420593e-8e8b-4326-b818-7281d9e605c1" width="720" autoplay loop muted playsinline controls></video>
+  <img src="res/gifs/Single_Track_1280_basement.gif" alt="Real-time YOLOv8n UAV detection (single 1280x1280 stream) running on the RK3588S NPU" width="720">
   <br>
   <em>Single 1280&times;1280 stream, real-world indoor scene, live on the RK3588S NPU.</em>
 </p>
@@ -89,7 +89,7 @@ same binary runs at full speed on the cheapest 2 GB boards (**~€90**) — no
 for the per-frame offload table and pipeline diagram.
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/54a6c867-7863-4a65-8571-df8f8d4e0ae0" width="720" autoplay loop muted playsinline controls></video>
+  <img src="res/gifs/Dual_Track.gif" alt="Two independent 800x800 YOLOv8n streams tracked side by side on one RK3588S NPU" width="720">
   <br>
   <em>Two independent 800&times;800 streams tracked side by side on a single board (~290 MB RSS total).</em>
 </p>
